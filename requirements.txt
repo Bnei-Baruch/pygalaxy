@@ -1,0 +1,7 @@
+# make sure gst-python is installed in your system
+# https://gstreamer.freedesktop.org/modules/gst-python.html
+
+# make sure PyGObject is installed in your system
+# https://wiki.gnome.org/Projects/PyGObject
+
+bottle
