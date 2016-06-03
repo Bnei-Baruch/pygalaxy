@@ -96,3 +96,8 @@ class GstreamerManager(object):
 
     def get_titles(self):
         return self.titles
+
+    def is_alive(self):
+        # TODO: implement something useful here
+        return True
+
