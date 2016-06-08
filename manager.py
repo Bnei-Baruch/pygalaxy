@@ -1,9 +1,10 @@
 import logging
+import threading
 
 import gi
 
 gi.require_version('Gst', '1.0')
-from gi.repository import Gst
+from gi.repository import Gst, GObject
 
 log = logging.getLogger(__name__)
 
@@ -70,11 +71,17 @@ class GstreamerManager(object):
         self.pipelines = {}
         self.overlays = {}
         self.titles = {}
+        self.g_loop = None
+        self.g_loop_thread = None
 
     def initialize(self):
         # https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-Gst.html#gst-init
         log.info('Initializing GStreamer library')
         Gst.init(None)
+
+        # Initialize thread support
+        # https://wiki.gnome.org/Projects/PyGObject/Threading
+        GObject.threads_init()
 
         log.info('Initializing pipelines')
         self.init_pipeline('large', self.LARGE_CMD)
@@ -92,17 +99,34 @@ class GstreamerManager(object):
             log.debug('Setting %s pipeline to PLAY', name)
             pipeline.set_state(Gst.State.PLAYING)
 
+        log.info('Kicking off GObject.MainLoop thread')
+        self.g_loop = GObject.MainLoop()
+        self.g_loop_thread = threading.Thread(target=self.g_loop.run)
+        self.g_loop_thread.daemon = True
+        self.g_loop_thread.start()
+
     def init_pipeline(self, name, cmd):
         log.debug('Initializing %s pipeline', name)
         log.debug(cmd)
-        self.pipelines[name] = Gst.parse_launch(cmd)
-        return self.pipelines[name]
+        pipeline = Gst.parse_launch(cmd)
+        self.pipelines[name] = pipeline
+        bus = pipeline.get_bus()
+        bus.add_signal_watch()
+        bus.connect('message', self.on_message(name))
+        # bus.connect('message::error', self.on_error(name))
+        return pipeline
 
     def shutdown(self):
         log.info('Shutting down')
+
+        log.info('Shutting down pipelines')
         for name, pipeline in self.pipelines.iteritems():
             log.debug('Setting %s pipeline to NULL', name)
             pipeline.set_state(Gst.State.NULL)
+
+        log.info('Shutting down GObject.MainLoop')
+        self.g_loop.quit()
+        self.g_loop_thread.join()
 
     def set_title(self, port, title):
         log.info('Setting title for %d to %s', port, title)
@@ -111,6 +135,20 @@ class GstreamerManager(object):
 
     def get_titles(self):
         return self.titles
+
+    @staticmethod
+    def on_error(name):
+        def f(bus, msg):
+            log.error('Bus Error[%s]: %s', name, msg.parse_error())
+        return f
+
+    @staticmethod
+    def on_message(name):
+        def f(bus, msg):
+            log.info('Bus Message[%s]: %s', name, msg.type)
+            return Gst.BusSyncReply.PASS
+
+        return f
 
     def is_alive(self):
         # TODO: implement something useful here

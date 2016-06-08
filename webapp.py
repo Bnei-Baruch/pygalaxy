@@ -4,6 +4,7 @@ import os
 import pprint
 
 import bottle
+import sys
 from bottle import request, response
 
 from manager import GstreamerManager, GstreamerManagerDev
@@ -45,9 +46,16 @@ def health_check():
     if not GSTManager.is_alive():
         response.status = '500 Gstreamer manager is dead'
         return
-
     return "SUCCESS"
 
+
+@app.post('/restart/')
+def restart():
+    GSTManager.shutdown()
+    GSTManager.initialize()
+    for port, title in GSTManager.get_titles().iteritems():
+        GSTManager.set_title(port, title)
+    return "SUCCESS"
 
 log.info('Running application')
 app.run(host=app.config['host'], port=app.config['port'])
