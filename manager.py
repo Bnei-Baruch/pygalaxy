@@ -113,7 +113,6 @@ class GstreamerManager(object):
         bus = pipeline.get_bus()
         bus.add_signal_watch()
         bus.connect('message', self.on_message(name))
-        # bus.connect('message::error', self.on_error(name))
         return pipeline
 
     def shutdown(self):
@@ -136,23 +135,30 @@ class GstreamerManager(object):
     def get_titles(self):
         return self.titles
 
-    @staticmethod
-    def on_error(name):
+    def on_message(self, name):
         def f(bus, msg):
-            log.error('Bus Error[%s]: %s', name, msg.parse_error())
-        return f
-
-    @staticmethod
-    def on_message(name):
-        def f(bus, msg):
-            log.info('Bus Message[%s]: %s', name, msg.type)
+            if msg.type == Gst.MESSAGE_ERROR:
+                err, debug = msg.parse_error()
+                log.error('Bus Error [%s]: %s', name, err)
+            elif msg.type == Gst.MESSAGE_WARNING:
+                log.warning('Bus Warning [%s]: %s', name, msg)
+            elif msg.type == Gst.MESSAGE_STATE_CHANGED:
+                old, new, pending = msg.parse_state_changed()
+                log.debug('Bus State Changed [%s], %s => %s (pending: %s)', name, old, new, pending)
+            elif msg.has_name('GstUDPSrcTimeout'):
+                self.on_timeout(name)
+            else:
+                log.debug('Bus Message [%s], %s => %s (pending: %s)', name, msg.type)
             return Gst.BusSyncReply.PASS
 
         return f
 
+    def on_timeout(self, name):
+        log.warning('%s [%s] timeout', self.titles[name], name)
+        #TODO: implement restart management here
+
     def is_alive(self):
-        # TODO: implement something useful here
-        return True
+        return self.g_loop_thread and self.g_loop_thread.is_alive()
 
 
 class GstreamerManagerDev(GstreamerManager):
