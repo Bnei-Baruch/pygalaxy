@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 app = bottle.default_app()
 app.config['host'] = os.environ.get('GALAXY_HOST', '0.0.0.0')
-app.config['port'] = int(os.environ.get('GALAXY_PORT', 8081))
+app.config['port'] = int(os.environ.get('GALAXY_PORT', 8080))
 app.config['galaxy.env'] = os.environ.get('GALAXY_ENV', 'dev')
 
 log.debug('Application config')
@@ -35,9 +35,18 @@ def get_titles():
 
 @app.post('/titles/')
 def set_titles():
-    log.debug(request.json)
+    log.debug('set_titles: %s', request.json)
     for x in request.json:
         GSTManager.set_title(int(x['port']), x['title'])
+    return "SUCCESS"
+
+
+@app.get('/title.php')
+def set_titles_legacy():
+    log.debug('set_titles_legacy: %s', request.query_string)
+    port = int(request.query.port)
+    title = request.query.title
+    GSTManager.set_title(port, title)
     return "SUCCESS"
 
 
