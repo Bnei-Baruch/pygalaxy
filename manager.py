@@ -137,25 +137,32 @@ class GstreamerManager(object):
 
     def on_message(self, name):
         def f(bus, msg):
-            if msg.type == Gst.MESSAGE_ERROR:
+            if msg.type == Gst.MessageType.ERROR:
                 err, debug = msg.parse_error()
                 log.error('Bus Error [%s]: %s', name, err)
-            elif msg.type == Gst.MESSAGE_WARNING:
+            elif msg.type == Gst.MessageType.WARNING:
                 log.warning('Bus Warning [%s]: %s', name, msg)
-            elif msg.type == Gst.MESSAGE_STATE_CHANGED:
+            elif msg.type == Gst.MessageType.STATE_CHANGED:
                 old, new, pending = msg.parse_state_changed()
                 log.debug('Bus State Changed [%s], %s => %s (pending: %s)', name, old, new, pending)
             elif msg.has_name('GstUDPSrcTimeout'):
                 self.on_timeout(name)
             else:
-                log.debug('Bus Message [%s], %s => %s (pending: %s)', name, msg.type)
+                log.debug('Bus other message [%s], %s', name, msg.type)
             return Gst.BusSyncReply.PASS
 
         return f
 
     def on_timeout(self, name):
         log.warning('%s [%s] timeout', self.titles[name], name)
-        #TODO: implement restart management here
+        self.restart_pipeline(name)
+
+    def restart_pipeline(self, name):
+        log.info('Restarting %s', name)
+        pipeline = self.pipelines[name]
+        pipeline.set_state(Gst.State.READY)
+        pipeline.set_state(Gst.State.PAUSED)
+        pipeline.set_state(Gst.State.PLAYING)
 
     def is_alive(self):
         return self.g_loop_thread and self.g_loop_thread.is_alive()
