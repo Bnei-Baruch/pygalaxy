@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 app = bottle.default_app()
 app.config['host'] = os.environ.get('GALAXY_HOST', '0.0.0.0')
-app.config['port'] = int(os.environ.get('GALAXY_PORT', 8080))
+app.config['port'] = int(os.environ.get('GALAXY_PORT', 8081))
 app.config['galaxy.env'] = os.environ.get('GALAXY_ENV', 'dev')
 
 log.debug('Application config')

@@ -1,3 +1,5 @@
-1. Gstreamer bus listener
+1. Production deployment on SDI
 2. Restart endpoint + cron job
-3. Persist titles on disk
+3. Composite GSTManager
+4. Composite deployment
+5. Persist titles on disk
