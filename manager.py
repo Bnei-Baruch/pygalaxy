@@ -75,13 +75,20 @@ class GstreamerManager(object):
         self.g_loop_thread = None
 
     def initialize(self):
-        # https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-Gst.html#gst-init
-        log.info('Initializing GStreamer library')
-        Gst.init(None)
+        log.info('Kicking off GObject.MainLoop thread')
+        self.g_loop = GObject.MainLoop()
+        self.g_loop_thread = threading.Thread(target=self.g_loop.run)
+        self.g_loop_thread.daemon = True
+        self.g_loop_thread.start()
 
         # Initialize thread support
         # https://wiki.gnome.org/Projects/PyGObject/Threading
+        log.info('Initializing GLib thread support')
         GObject.threads_init()
+
+        # https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-Gst.html#gst-init
+        log.info('Initializing GStreamer library')
+        Gst.init(None)
 
         log.info('Initializing pipelines')
         self.init_pipeline('large', self.LARGE_CMD)
@@ -98,12 +105,6 @@ class GstreamerManager(object):
         for name, pipeline in self.pipelines.iteritems():
             log.debug('Setting %s pipeline to PLAY', name)
             pipeline.set_state(Gst.State.PLAYING)
-
-        log.info('Kicking off GObject.MainLoop thread')
-        self.g_loop = GObject.MainLoop()
-        self.g_loop_thread = threading.Thread(target=self.g_loop.run)
-        self.g_loop_thread.daemon = True
-        self.g_loop_thread.start()
 
     def init_pipeline(self, name, cmd):
         log.debug('Initializing %s pipeline', name)
