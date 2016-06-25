@@ -1,6 +1,5 @@
 import logging
 import threading
-from time import sleep
 
 import gi
 
@@ -88,7 +87,6 @@ class GstreamerManager(object):
         # https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-Gst.html#gst-init
         log.info('Initializing GStreamer library')
         Gst.init(None)
-        sleep(3)
 
         log.info('Initializing pipelines')
         self.init_pipeline('large', self.LARGE_CMD)
@@ -142,13 +140,14 @@ class GstreamerManager(object):
                 err, debug = msg.parse_error()
                 log.error('Bus Error [%s]: %s', name, err)
             elif msg.type == Gst.MessageType.WARNING:
-                log.warning('Bus Warning [%s]: %s', name, msg)
+                err, debug = msg.parse_warning()
+                log.warning('Bus Warning [%s]: %s', name, err)
             elif msg.type == Gst.MessageType.STATE_CHANGED:
                 old, new, pending = msg.parse_state_changed()
-                log.debug('Bus State Changed [%s], %s => %s (pending: %s)', name, old, new, pending)
+                log.debug('Bus State Changed [%s], %s => %s (pending: %s)', name, old.value_nick, new.value_nick, pending.value_nick)
             elif msg.has_name('GstUDPSrcTimeout'):
                 self.on_timeout(name)
-            else:
+            elif not msg.type == Gst.MessageType.QOS:
                 log.debug('Bus other message [%s], %s', name, msg.type)
             return Gst.BusSyncReply.PASS
 
