@@ -1,5 +1,6 @@
 import logging
 import threading
+from time import sleep
 
 import gi
 
@@ -22,7 +23,6 @@ class GstreamerManager(object):
         'interlace field-pattern=2:2',
         'video/x-raw, format=UYVY, width=720, height=576, framerate=25/1, interlace-mode=interleaved, pixel-aspect-ratio=12/11, colorimetry=bt601, chroma-site=mpeg2',
         'textoverlay name=overlay text="" ypad=0 valignment=top halignment=right font-desc="LiberationSerif 65px" shaded-background=false draw-shadow=false',
-        'compositor name=mix timeout=100000000',
         'decklinkvideosink device-number={device_number} mode=3'
     ])
 
@@ -45,7 +45,6 @@ class GstreamerManager(object):
         'textoverlay name=overlay2 text="" ypad=10 xpad=360 valignment=top halignment=right font-desc="LiberationSerif 35px" draw-shadow=false shaded-background=false',
         'textoverlay name=overlay3 text="" ypad=280 xpad=360 valignment=top halignment=right font-desc="LiberationSerif 35px" draw-shadow=false shaded-background=false',
         'textoverlay name=overlay4 text="" ypad=280 xpad=10 valignment=top halignment=right font-desc="LiberationSerif 35px" draw-shadow=false shaded-background=false',
-        'compositor name=mix timeout=100000000',
         'decklinkvideosink device-number=2 mode=3'
     ])
 
@@ -89,6 +88,7 @@ class GstreamerManager(object):
         # https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-Gst.html#gst-init
         log.info('Initializing GStreamer library')
         Gst.init(None)
+        sleep(3)
 
         log.info('Initializing pipelines')
         self.init_pipeline('large', self.LARGE_CMD)
