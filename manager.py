@@ -138,17 +138,14 @@ class GstreamerManager(object):
         def f(bus, msg):
             if msg.type == Gst.MessageType.ERROR:
                 err, debug = msg.parse_error()
-                log.error('Bus Error [%s]: %s', name, err)
+                log.error('Bus [%s], error: %s', name, err)
             elif msg.type == Gst.MessageType.WARNING:
                 err, debug = msg.parse_warning()
-                log.warning('Bus Warning [%s]: %s', name, err)
-            elif msg.type == Gst.MessageType.STATE_CHANGED:
-                old, new, pending = msg.parse_state_changed()
-                log.debug('Bus State Changed [%s], %s => %s (pending: %s)', name, old.value_nick, new.value_nick, pending.value_nick)
+                log.warning('Bus [%s], warning: %s', name, err)
             elif msg.has_name('GstUDPSrcTimeout'):
                 self.on_timeout(name)
             elif not msg.type == Gst.MessageType.QOS:
-                log.debug('Bus other message [%s], %s', name, msg.type)
+                log.debug('Bus [%s], %s: %s', name, msg.src.get_name(), msg.get_structure().to_string())
             return Gst.BusSyncReply.PASS
 
         return f
