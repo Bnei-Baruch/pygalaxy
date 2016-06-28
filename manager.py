@@ -2,6 +2,9 @@ import logging
 import threading
 
 import gi
+import sys
+
+import thread
 
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GObject
@@ -73,9 +76,8 @@ class GstreamerManager(object):
         self.g_loop_thread = None
 
     def initialize(self):
-        log.info('Kicking off GObject.MainLoop thread')
-        self.g_loop = GObject.MainLoop()
-        self.g_loop_thread = threading.Thread(target=self.g_loop.run)
+        log.info('Starting GLib.MainLoop thread')
+        self.g_loop_thread = threading.Thread(target=self.run_glib_loop)
         self.g_loop_thread.daemon = True
         self.g_loop_thread.start()
 
@@ -104,8 +106,17 @@ class GstreamerManager(object):
             log.debug('Setting %s pipeline to PLAY', name)
             pipeline.set_state(Gst.State.PLAYING)
 
+    def run_glib_loop(self):
+        self.g_loop = GObject.MainLoop()
+        try:
+            self.g_loop.run()
+        except KeyboardInterrupt:
+            log.info('Ctrl+C hit, quitting')
+            self.shutdown()
+            thread.interrupt_main()
+
     def init_pipeline(self, name, cmd):
-        log.debug('Initializing %s pipeline', name)
+        log.debug('Initializing pipeline: %s', name)
         log.debug(cmd)
         pipeline = Gst.parse_launch(cmd)
         self.pipelines[name] = pipeline
@@ -122,9 +133,12 @@ class GstreamerManager(object):
             log.debug('Setting %s pipeline to NULL', name)
             pipeline.set_state(Gst.State.NULL)
 
-        log.info('Shutting down GObject.MainLoop')
+        log.info('Quiting GLib.MainLoop')
         self.g_loop.quit()
-        self.g_loop_thread.join()
+
+        if threading.current_thread() is not self.g_loop_thread:
+            log.info('Join GLib MainLoop thread')
+            self.g_loop_thread.join()
 
     def set_title(self, port, title):
         log.info('Setting title for %d to %s', port, title)
@@ -145,7 +159,9 @@ class GstreamerManager(object):
             elif msg.has_name('GstUDPSrcTimeout'):
                 self.on_timeout(name)
             elif not msg.type == Gst.MessageType.QOS:
-                log.debug('Bus [%s], %s: %s', name, msg.src.get_name(), msg.get_structure().to_string())
+                structure = msg.get_structure()
+                if structure:
+                    log.debug('Bus [%s], %s: %s', name, msg.src.get_name(), structure.to_string())
             return Gst.BusSyncReply.PASS
 
         return f

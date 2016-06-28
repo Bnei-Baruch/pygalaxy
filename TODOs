@@ -1,5 +1,6 @@
 1. Production deployment on SDI
-2. Restart endpoint + cron job
+2. Cron job to restart application
 3. Composite GSTManager
 4. Composite deployment
 5. Persist titles on disk
+6. QOS analysis
