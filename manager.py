@@ -1,10 +1,8 @@
 import logging
+import thread
 import threading
 
 import gi
-import sys
-
-import thread
 
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GObject
@@ -50,6 +48,15 @@ class GstreamerManager(object):
         'decklinkvideosink device-number=2 mode=3'
     ])
 
+    AUDIO_CMD = ' ! '.join([
+        'udpsrc port=8042 caps="application/x-rtp, media=audio, payload=111, clock-rate=48000, encoding-name=X-GST-OPUS-DRAFT-SPITTKA-00"',
+        'rtpjitterbuffer',
+        'rtpopusdepay',
+        'queue',
+        'opusdec plc=true',
+        'alsasink'
+    ])
+
     FOURS_PORT_SLOT_MAP = {
         5024: '2',
         5026: '3',
@@ -72,6 +79,7 @@ class GstreamerManager(object):
         self.pipelines = {}
         self.overlays = {}
         self.titles = {}
+        self.audio_pipeline = None
         self.g_loop = None
         self.g_loop_thread = None
 
@@ -95,6 +103,8 @@ class GstreamerManager(object):
         self.init_pipeline('small', self.SMALL_CMD)
         self.init_pipeline('control', self.CONTROL_CMD)
         self.init_pipeline('fours', self.FOURS_CMD)
+        self.init_pipeline('audio', self.AUDIO_CMD)
+        self.audio_pipeline = self.pipelines.pop('audio')
 
         # Keep a quick reference map from port to text overlay element
         for port, channel in self.PORT_CHANNEL_MAP.iteritems():
@@ -105,6 +115,8 @@ class GstreamerManager(object):
         for name, pipeline in self.pipelines.iteritems():
             log.debug('Setting %s pipeline to PLAY', name)
             pipeline.set_state(Gst.State.PLAYING)
+        log.debug('Setting audio pipeline to PLAY')
+        self.audio_pipeline.set_state(Gst.State.PLAYING)
 
     def run_glib_loop(self):
         self.g_loop = GObject.MainLoop()
@@ -132,6 +144,8 @@ class GstreamerManager(object):
         for name, pipeline in self.pipelines.iteritems():
             log.debug('Setting %s pipeline to NULL', name)
             pipeline.set_state(Gst.State.NULL)
+        log.debug('Setting audio pipeline to NULL')
+        self.audio_pipeline.set_state(Gst.State.NULL)
 
         log.info('Quiting GLib.MainLoop')
         self.g_loop.quit()
@@ -204,4 +218,10 @@ class GstreamerManagerDev(GstreamerManager):
         'videotestsrc pattern=snow ! mix.',
         'videotestsrc pattern=spokes ! mix.',
         'videotestsrc pattern=ball ! mix.'
+    ])
+
+    AUDIO_CMD = ' ! '.join([
+        'audiotestsrc',
+        'audioconvert',
+        'autoaudiosink'
     ])
