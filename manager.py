@@ -181,7 +181,7 @@ class GstreamerManager(object):
         return f
 
     def on_timeout(self, name):
-        log.warning('%s [%s] timeout', self.titles[name], name)
+        log.warning('%s timeout', name)
         self.restart_pipeline(name)
 
     def restart_pipeline(self, name):
