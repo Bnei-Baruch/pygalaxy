@@ -115,9 +115,9 @@ class GstreamerManager(object):
 
         log.info('Playing pipelines')
         for name, pipeline in self.pipelines.iteritems():
-            log.debug('Setting %s pipeline to PLAY', name)
+            log.info('Setting %s pipeline to PLAY', name)
             pipeline.set_state(Gst.State.PLAYING)
-        log.debug('Setting audio pipeline to PLAY')
+        log.info('Setting audio pipeline to PLAY')
         self.audio_pipeline.set_state(Gst.State.PLAYING)
 
     def run_glib_loop(self):
@@ -130,7 +130,7 @@ class GstreamerManager(object):
             thread.interrupt_main()
 
     def init_pipeline(self, name, cmd):
-        log.debug('Initializing pipeline: %s', name)
+        log.info('Initializing pipeline: %s', name)
         log.debug(cmd)
         pipeline = Gst.parse_launch(cmd)
         self.pipelines[name] = pipeline
@@ -144,9 +144,9 @@ class GstreamerManager(object):
 
         log.info('Shutting down pipelines')
         for name, pipeline in self.pipelines.iteritems():
-            log.debug('Setting %s pipeline to NULL', name)
+            log.info('Setting %s pipeline to NULL', name)
             pipeline.set_state(Gst.State.NULL)
-        log.debug('Setting audio pipeline to NULL')
+        log.info('Setting audio pipeline to NULL')
         self.audio_pipeline.set_state(Gst.State.NULL)
 
         log.info('Quiting GLib.MainLoop')
@@ -174,7 +174,10 @@ class GstreamerManager(object):
                 log.warning('Bus [%s], warning: %s', name, err)
             elif msg.has_name('GstUDPSrcTimeout'):
                 self.on_timeout(name)
-            elif not msg.type == Gst.MessageType.QOS:
+            elif msg.type not in (Gst.MessageType.QOS,
+                                  Gst.MessageType.STATE_CHANGED,
+                                  Gst.MessageType.STREAM_STATUS,
+                                  Gst.MessageType.STREAM_START):
                 structure = msg.get_structure()
                 if structure:
                     log.debug('Bus [%s], %s: %s', name, msg.src.get_name(), structure.to_string())
