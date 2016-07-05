@@ -88,7 +88,7 @@ def restart():
     return "SUCCESS"
 
 
-app.install(EnableCors())
+# app.install(EnableCors())
 
 log.info('Running application')
 app.run(host=app.config['host'], port=app.config['port'])
