@@ -1,6 +1,7 @@
 import logging
 import thread
 import threading
+from collections import defaultdict
 
 import gi
 
@@ -79,6 +80,7 @@ class GstreamerManager(object):
         self.pipelines = {}
         self.overlays = {}
         self.titles = {}
+        self.timeout_counters = defaultdict(int)
         self.audio_pipeline = None
         self.g_loop = None
         self.g_loop_thread = None
@@ -181,8 +183,30 @@ class GstreamerManager(object):
         return f
 
     def on_timeout(self, name):
-        log.warning('%s timeout', name)
-        self.restart_pipeline(name)
+        """
+        Timeouts are meaningful only during lessons.
+         Outside lessons, this handler is called all the time since nobody is forwarding from janus.
+         Thus causing timeouts on our udpsrc.
+
+        Restarting the pipeline all the time is ugly.
+         So we keep a count of timeouts and restart the pipeline in the first minute (6 timeouts).
+         After that we ignore these events for 10 minutes (6 * 10 * 10) and then reset the counter.
+         This allow us to keep the application running all the time without the need to restart it
+         periodically with cron.
+
+        This could be fixed when we'll have (if ever) a proper integration with event status notifications
+         from transcoder-manager.
+        """
+        self.timeout_counters[name] += 1
+        count = self.timeout_counters[name]
+        if count == 6 * 10 * 10:
+            log.info('Resetting timeout counter for %s after %d minutes of continuous timeout', name, 10)
+            count = self.timeout_counters[name] = 0
+        if count < 6:
+            log.warning('Meaningful timeout: %s', name)
+            self.restart_pipeline(name)
+        else:
+            log.debug('Ignoring timeout: %s', name)
 
     def restart_pipeline(self, name):
         log.info('Restarting %s', name)
