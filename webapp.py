@@ -27,26 +27,21 @@ GSTManager.initialize()
 log.info('Gstreamer Manager initialization complete')
 
 
- # class EnableCors(object):
- #    """
- #        Enable CORS via a bottle plugin
- #        See http://stackoverflow.com/questions/17262170/bottle-py-enabling-cors-for-jquery-ajax-requests
- #    """
- #    name = 'enable_cors'
- #    api = 2
- #
- #    def apply(self, fn, context):
- #        def _enable_cors(*args, **kwargs):
- #            # set CORS headers
- #            response.headers['Access-Control-Allow-Origin'] = '*'
- #            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
- #            response.headers['Access-Control-Allow-Headers'] = 'Origin, Accept, Content-Type, X-Requested-With, X-CSRF-Token ,DNT ,X-CustomHeader ,Keep-Alive ,User-Agent ,X-Requested-With, If-Modified-Since,Cache-Control'
- #
- #            if bottle.request.method != 'OPTIONS':
- #                # actual request; reply with the actual response
- #                return fn(*args, **kwargs)
- #
- #        return _enable_cors
+class EmptyOptions(object):
+    """
+        Bottle plugin to return successful empty response for OPTIONS method
+    """
+    name = 'empty_options'
+    api = 2
+
+    def apply(self, fn, context):
+
+        def wrapper(*args, **kwargs):
+            if bottle.request.method == 'OPTIONS':
+                return
+            return fn(*args, **kwargs)
+
+        return wrapper
 
 
 @app.route('/titles/', method=['OPTIONS', 'GET'])
@@ -88,7 +83,7 @@ def restart():
     return "SUCCESS"
 
 
-# app.install(EnableCors())
+app.install(EmptyOptions())
 
 log.info('Running application')
 app.run(host=app.config['host'], port=app.config['port'])
