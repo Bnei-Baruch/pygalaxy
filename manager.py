@@ -5,6 +5,7 @@ from collections import defaultdict
 
 import gi
 
+
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GObject
 
@@ -74,6 +75,9 @@ class GstreamerManager(object):
         5028: 'fours',
         5030: 'fours',
     }
+
+    MEANINGFUL_TIMEOUT_PERIOD = 10  # in seconds
+    TIMEOUT_RESET_TIME = 60 * 10  # in seconds
 
     def __init__(self):
         super(GstreamerManager, self).__init__()
@@ -193,8 +197,8 @@ class GstreamerManager(object):
          Thus causing timeouts on our udpsrc.
 
         Restarting the pipeline all the time is ugly.
-         So we keep a count of timeouts and restart the pipeline in the first minute (6 timeouts).
-         After that we ignore these events for 10 minutes (6 * 10 * 10) and then reset the counter.
+         So we keep a count of timeouts and restart the pipeline in the first 10 seconds.
+         After that we ignore these events for 10 minutes and then reset the counter.
          This allow us to keep the application running all the time without the need to restart it
          periodically with cron.
 
@@ -202,10 +206,10 @@ class GstreamerManager(object):
         """
         self.timeout_counters[name] += 1
         count = self.timeout_counters[name]
-        if count == 6 * 10 * 10:
+        if count == self.TIMEOUT_RESET_TIME:
             log.debug('Resetting timeout counter for %s after %d minutes of continuous timeout', name, 10)
             count = self.timeout_counters[name] = 0
-        if count < 6:
+        if count < self.MEANINGFUL_TIMEOUT_PERIOD:
             log.warning('Meaningful timeout: %s, %d', name, count)
             self.restart_pipeline(name)
         else:
@@ -223,7 +227,7 @@ class GstreamerManager(object):
         Make sure the given pipeline is alive.
         This is another signal for waking up udpsrc from long timeout periods.
         """
-        if self.timeout_counters[name] > 2:
+        if self.timeout_counters[name] > self.MEANINGFUL_TIMEOUT_PERIOD:
             log.debug('Wake up %s (%d timeouts)', name, self.timeout_counters[name])
             self.restart_pipeline(name)
             self.timeout_counters[name] = 0
