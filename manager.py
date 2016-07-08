@@ -160,6 +160,7 @@ class GstreamerManager(object):
         log.info('Setting title for %d to %s', port, title)
         self.titles[port] = title
         self.overlays[port].set_property('text', '<span foreground="white" background="blue">' + title + '</span>')
+        self.wake_up(self.PORT_CHANNEL_MAP[port])
 
     def get_titles(self):
         return self.titles
@@ -197,19 +198,18 @@ class GstreamerManager(object):
          This allow us to keep the application running all the time without the need to restart it
          periodically with cron.
 
-        This could be fixed when we'll have (if ever) a proper integration with event status notifications
-         from transcoder-manager.
+        We also wake up on moderator interaction (for example, set_title). See self.wake_up()
         """
         self.timeout_counters[name] += 1
         count = self.timeout_counters[name]
         if count == 6 * 10 * 10:
-            log.info('Resetting timeout counter for %s after %d minutes of continuous timeout', name, 10)
+            log.debug('Resetting timeout counter for %s after %d minutes of continuous timeout', name, 10)
             count = self.timeout_counters[name] = 0
         if count < 6:
-            log.warning('Meaningful timeout: %s', name)
+            log.warning('Meaningful timeout: %s, %d', name, count)
             self.restart_pipeline(name)
         else:
-            log.debug('Ignoring timeout: %s', name)
+            log.debug('Ignoring timeout: %s %d', name, count)
 
     def restart_pipeline(self, name):
         log.info('Restarting %s', name)
@@ -217,6 +217,16 @@ class GstreamerManager(object):
         pipeline.set_state(Gst.State.READY)
         pipeline.set_state(Gst.State.PAUSED)
         pipeline.set_state(Gst.State.PLAYING)
+
+    def wake_up(self, name):
+        """
+        Make sure the given pipeline is alive.
+        This is another signal for waking up udpsrc from long timeout periods.
+        """
+        if self.timeout_counters[name] > 2:
+            log.debug('Wake up %s (%d timeouts)', name, self.timeout_counters[name])
+            self.restart_pipeline(name)
+            self.timeout_counters[name] = 0
 
     def is_alive(self):
         return self.g_loop_thread and self.g_loop_thread.is_alive()
