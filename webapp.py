@@ -83,6 +83,10 @@ def restart():
     return "SUCCESS"
 
 
+@app.route('/timeouts/', method=['OPTIONS', 'GET'])
+def get_timeouts():
+    return GSTManager.get_timeouts()
+
 app.install(EmptyOptions())
 
 log.info('Running application')

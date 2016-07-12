@@ -164,7 +164,7 @@ class GstreamerManager(object):
         log.info('Setting title for %d to %s', port, title)
         self.titles[port] = title
         self.overlays[port].set_property('text', '<span foreground="white" background="blue">' + title + '</span>')
-        self.wake_up(self.PORT_CHANNEL_MAP[port])
+        self.wake_up()
 
     def get_titles(self):
         return self.titles
@@ -222,15 +222,19 @@ class GstreamerManager(object):
         pipeline.set_state(Gst.State.PAUSED)
         pipeline.set_state(Gst.State.PLAYING)
 
-    def wake_up(self, name):
+    def wake_up(self):
         """
-        Make sure the given pipeline is alive.
+        Make sure all video pipelines are alive.
         This is another signal for waking up udpsrc from long timeout periods.
         """
-        if self.timeout_counters[name] > self.MEANINGFUL_TIMEOUT_PERIOD:
-            log.debug('Wake up %s (%d timeouts)', name, self.timeout_counters[name])
-            self.restart_pipeline(name)
-            self.timeout_counters[name] = 0
+        for name, count in self.timeout_counters.iteritems():
+            log.debug('Wake up %s (%d timeouts)', name, count)
+            if count > self.MEANINGFUL_TIMEOUT_PERIOD:
+                self.restart_pipeline(name)
+                self.timeout_counters[name] = 0
+
+    def get_timeouts(self):
+        return self.timeout_counters
 
     def is_alive(self):
         return self.g_loop_thread and self.g_loop_thread.is_alive()
