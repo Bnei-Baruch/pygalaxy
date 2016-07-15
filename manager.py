@@ -115,7 +115,7 @@ class BaseGSTManager(object):
         return f
 
     def on_timeout(self, name):
-        pass
+        self.timeout_counters[name] += 1
 
     def get_timeouts(self):
         return self.timeout_counters
@@ -228,7 +228,7 @@ class SDIManager(BaseGSTManager):
 
         We also wake up on moderator interaction (for example, set_title). See self.wake_up()
         """
-        self.timeout_counters[name] += 1
+        super(SDIManager, self).on_timeout(name)
         count = self.timeout_counters[name]
         if count == self.TIMEOUT_RESET_TIME:
             log.debug('Resetting timeout counter for %s after %d minutes of continuous timeout', name, 10)
@@ -284,4 +284,135 @@ class SDIManagerDev(SDIManager):
 
 
 class CompositeGSTManager(BaseGSTManager):
-    pass
+
+    PREVIEW_CMD = '''
+        compositor name=mix timeout=100000000 sink_0::xpos=0 sink_0::ypos=0 sink_1::xpos=0 sink_1::ypos=180 sink_2::xpos=320 sink_2::ypos=0 sink_3::xpos=320 sink_3::ypos=180 sync=false !
+        video/x-raw, format=UYVY, width=640, height=360, framerate=25/1 !
+        videoscale !
+        videorate !
+        videoconvert !
+        vp8enc end-usage=cbr cpu-used=15 deadline=1 target-bitrate=600000 max-intra-bitrate=600000 threads=4 error-resilient=0x00000001 !
+        rtpvp8pay !
+        queue !
+        tee name=t !
+        queue !
+        udpsink host=jnseur.kbb1.com port=20024 t. !
+        queue !
+        udpsink host=127.0.0.1 port=20024 \
+
+        udpsrc port=6024 name="udpsrc6024" timeout=1000000000 caps="application/x-rtp, media=video, payload=100, clock-rate=90000, encoding-name=VP8-DRAFT-IETF-01" !
+        rtpjitterbuffer do-lost=false latency=50 drop-on-latency=true !
+        rtpvp8depay !
+        queue !
+        vp8dec !
+        videoscale !
+        videorate !
+        videoconvert !
+        video/x-raw, format=UYVY, width=320, height=180, framerate=25/1 !
+        mix. \
+
+        udpsrc port=6026 name="udpsrc6026" timeout=1000000000 caps="application/x-rtp, media=video, payload=100, clock-rate=90000, encoding-name=VP8-DRAFT-IETF-01" !
+        rtpjitterbuffer do-lost=false latency=50 drop-on-latency=true !
+        rtpvp8depay !
+        queue !
+        vp8dec !
+        videoscale !
+        videorate !
+        videoconvert !
+        video/x-raw, format=UYVY, width=320, height=180, framerate=25/1 !
+        mix. \
+
+        udpsrc port=6028 name="udpsrc6028" timeout=1000000000 caps="application/x-rtp, media=video, payload=100, clock-rate=90000, encoding-name=VP8-DRAFT-IETF-01" !
+        rtpjitterbuffer do-lost=false latency=50 drop-on-latency=true !
+        rtpvp8depay !
+        queue !
+        vp8dec !
+        videoscale !
+        videorate !
+        videoconvert !
+        video/x-raw, format=UYVY, width=320, height=180, framerate=25/1 !
+        mix. \
+
+        udpsrc port=6030 name="udpsrc6030" timeout=1000000000 caps="application/x-rtp, media=video, payload=100, clock-rate=90000, encoding-name=VP8-DRAFT-IETF-01" !
+        rtpjitterbuffer do-lost=false latency=50 drop-on-latency=true !
+        rtpvp8depay !
+        queue !
+        vp8dec !
+        videoscale !
+        videorate !
+        videoconvert !
+        video/x-raw, format=UYVY, width=320, height=180, framerate=25/1 !
+        mix.
+    '''
+
+    PROGRAM_CMD = '''
+        compositor name=mix timeout=100000000 sink_0::xpos=0 sink_0::ypos=0 sink_1::xpos=0 sink_1::ypos=180 sink_2::xpos=320 sink_2::ypos=0 sink_3::xpos=320 sink_3::ypos=180 sync=false !
+        video/x-raw, format=UYVY, width=640, height=360, framerate=25/1 !
+        videoscale !
+        videorate !
+        videoconvert !
+        vp8enc end-usage=cbr cpu-used=15 deadline=1 target-bitrate=600000 max-intra-bitrate=600000 threads=4 error-resilient=0x00000001 !
+        rtpvp8pay !
+        queue !
+        tee name=t !
+        queue !
+        udpsink host=62.219.8.116 port=8024 t. !
+        queue !
+        udpsink host=127.0.0.1 port=8024 t. !
+        queue !
+        udpsink host=jnseur.kbb1.com port=8024 \
+
+        udpsrc port=5024 name="udpsrc5024" timeout=1000000000 caps="application/x-rtp, media=video, payload=100, clock-rate=90000, encoding-name=VP8-DRAFT-IETF-01" !
+        rtpjitterbuffer do-lost=false latency=50 drop-on-latency=true !
+        rtpvp8depay !
+        queue !
+        vp8dec !
+        videoscale !
+        videorate !
+        videoconvert !
+        video/x-raw, format=UYVY, width=320, height=180, framerate=25/1 !
+        mix.
+
+        udpsrc port=5026 name="udpsrc5026" timeout=1000000000 caps="application/x-rtp, media=video, payload=100, clock-rate=90000, encoding-name=VP8-DRAFT-IETF-01" !
+        rtpjitterbuffer do-lost=false latency=50 drop-on-latency=true !
+        rtpvp8depay !
+        queue !
+        vp8dec !
+        videoscale !
+        videorate !
+        videoconvert !
+        video/x-raw, format=UYVY, width=320, height=180, framerate=25/1 !
+        mix.
+
+        udpsrc port=5028 name="udpsrc5028" timeout=1000000000 caps="application/x-rtp, media=video, payload=100, clock-rate=90000, encoding-name=VP8-DRAFT-IETF-01" !
+        rtpjitterbuffer do-lost=false latency=50 drop-on-latency=true !
+        rtpvp8depay !
+        queue !
+        vp8dec !
+        videoscale !
+        videorate !
+        videoconvert !
+        video/x-raw, format=UYVY, width=320, height=180, framerate=25/1 !
+        mix.
+
+        udpsrc port=5030 name="udpsrc5030" timeout=1000000000 caps="application/x-rtp, media=video, payload=100, clock-rate=90000, encoding-name=VP8-DRAFT-IETF-01" !
+        rtpjitterbuffer do-lost=false latency=50 drop-on-latency=true !
+        rtpvp8depay !
+        queue !
+        vp8dec !
+        videoscale !
+        videorate !
+        videoconvert !
+        video/x-raw, format=UYVY, width=320, height=180, framerate=25/1 !
+        mix.
+    '''
+
+    def init_pipelines(self):
+        self.init_pipeline('program', self.PROGRAM_CMD)
+        self.init_pipeline('preview', self.PREVIEW_CMD)
+
+    def on_timeout(self, name):
+        super(CompositeGSTManager, self).on_timeout(name)
+
+
+
