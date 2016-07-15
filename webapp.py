@@ -6,7 +6,7 @@ import pprint
 import bottle
 from bottle import request, response
 
-from manager import GstreamerManager, GstreamerManagerDev
+from manager import SDIManager, SDIManagerDev
 
 logging.basicConfig(level=logging.DEBUG,
                     format='[%(asctime)s] %(levelname)s %(process)d %(threadName)s [%(name)s:%(lineno)s] %(message)s')
@@ -22,7 +22,7 @@ log.debug('Application config')
 log.debug(pprint.pformat(app.config))
 
 log.info('Initializing Gstreamer Manager')
-GSTManager = GstreamerManagerDev() if app.config['galaxy.env'] == 'dev' else GstreamerManager()
+GSTManager = SDIManagerDev() if app.config['galaxy.env'] == 'dev' else SDIManager()
 GSTManager.initialize()
 log.info('Gstreamer Manager initialization complete')
 

@@ -5,14 +5,123 @@ from collections import defaultdict
 
 import gi
 
-
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GObject
 
 log = logging.getLogger(__name__)
 
 
-class GstreamerManager(object):
+class BaseGSTManager(object):
+
+    def __init__(self):
+        super(BaseGSTManager, self).__init__()
+        self.g_loop = None
+        self.g_loop_thread = None
+        self.pipelines = {}
+        self.timeout_counters = defaultdict(int)
+
+    def initialize(self):
+        log.info('Starting GLib.MainLoop thread')
+        self.g_loop_thread = threading.Thread(target=self.run_glib_loop)
+        self.g_loop_thread.daemon = True
+        self.g_loop_thread.start()
+
+        # Initialize thread support
+        # https://wiki.gnome.org/Projects/PyGObject/Threading
+        log.info('Initializing GLib thread support')
+        GObject.threads_init()
+
+        # https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-Gst.html#gst-init
+        log.info('Initializing GStreamer library')
+        Gst.init(None)
+
+        log.info('Initializing pipelines')
+        self.init_pipelines()
+
+        log.info('Playing pipelines')
+        self.play_pipelines()
+
+    def run_glib_loop(self):
+        self.g_loop = GObject.MainLoop()
+        try:
+            self.g_loop.run()
+        except KeyboardInterrupt:
+            log.info('Ctrl+C hit, quitting')
+            self.shutdown()
+            thread.interrupt_main()
+
+    def is_alive(self):
+        return self.g_loop_thread and self.g_loop_thread.is_alive()
+
+    def init_pipelines(self):
+        raise NotImplemented
+
+    def play_pipelines(self):
+        for name, pipeline in self.pipelines.iteritems():
+            log.info('Setting %s pipeline to PLAY', name)
+            pipeline.set_state(Gst.State.PLAYING)
+
+    def init_pipeline(self, name, cmd):
+        log.info('Initializing pipeline: %s', name)
+        log.debug(cmd)
+        pipeline = Gst.parse_launch(cmd)
+        self.pipelines[name] = pipeline
+        bus = pipeline.get_bus()
+        bus.add_signal_watch()
+        bus.connect('message', self.on_message(name))
+        return pipeline
+
+    def restart_pipeline(self, name):
+        log.info('Restarting %s', name)
+        pipeline = self.pipelines[name]
+        pipeline.set_state(Gst.State.READY)
+        pipeline.set_state(Gst.State.PAUSED)
+        pipeline.set_state(Gst.State.PLAYING)
+
+    def shutdown(self):
+        log.info('Shutting down')
+
+        log.info('Shutting down pipelines')
+        for name, pipeline in self.pipelines.iteritems():
+            log.info('Setting %s pipeline to NULL', name)
+            pipeline.set_state(Gst.State.NULL)
+
+        log.info('Quiting GLib.MainLoop')
+        self.g_loop.quit()
+
+        if threading.current_thread() is not self.g_loop_thread:
+            log.info('Join GLib MainLoop thread')
+            self.g_loop_thread.join()
+
+    def on_message(self, name):
+        def f(bus, msg):
+            if msg.type == Gst.MessageType.ERROR:
+                err, debug = msg.parse_error()
+                log.error('Bus [%s], error: %s', name, err)
+            elif msg.type == Gst.MessageType.WARNING:
+                err, debug = msg.parse_warning()
+                log.warning('Bus [%s], warning: %s', name, err)
+            elif msg.has_name('GstUDPSrcTimeout'):
+                self.on_timeout(name)
+            elif msg.type not in (Gst.MessageType.QOS,
+                                  Gst.MessageType.STATE_CHANGED,
+                                  Gst.MessageType.STREAM_STATUS,
+                                  Gst.MessageType.STREAM_START):
+                structure = msg.get_structure()
+                if structure:
+                    log.debug('Bus [%s], %s: %s', name, msg.src.get_name(), structure.to_string())
+            return Gst.BusSyncReply.PASS
+
+        return f
+
+    def on_timeout(self, name):
+        pass
+
+    def get_timeouts(self):
+        return self.timeout_counters
+
+
+class SDIManager(BaseGSTManager):
     SINGLE_CMD = ' ! '.join([
         'udpsrc timeout=1000000000 port={port} caps="application/x-rtp, media=video, payload=100, clock-rate=90000, encoding-name=VP8-DRAFT-IETF-01"',
         'rtpjitterbuffer do-lost=false latency=50 drop-on-latency=true',
@@ -80,85 +189,21 @@ class GstreamerManager(object):
     TIMEOUT_RESET_TIME = 60 * 10  # in seconds
 
     def __init__(self):
-        super(GstreamerManager, self).__init__()
-        self.pipelines = {}
+        super(SDIManager, self).__init__()
         self.overlays = {}
         self.titles = {}
-        self.timeout_counters = defaultdict(int)
-        self.audio_pipeline = None
-        self.g_loop = None
-        self.g_loop_thread = None
 
-    def initialize(self):
-        log.info('Starting GLib.MainLoop thread')
-        self.g_loop_thread = threading.Thread(target=self.run_glib_loop)
-        self.g_loop_thread.daemon = True
-        self.g_loop_thread.start()
-
-        # Initialize thread support
-        # https://wiki.gnome.org/Projects/PyGObject/Threading
-        log.info('Initializing GLib thread support')
-        GObject.threads_init()
-
-        # https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-Gst.html#gst-init
-        log.info('Initializing GStreamer library')
-        Gst.init(None)
-
-        log.info('Initializing pipelines')
+    def init_pipelines(self):
         self.init_pipeline('large', self.LARGE_CMD)
         self.init_pipeline('small', self.SMALL_CMD)
         self.init_pipeline('control', self.CONTROL_CMD)
         self.init_pipeline('fours', self.FOURS_CMD)
         self.init_pipeline('audio', self.AUDIO_CMD)
-        self.audio_pipeline = self.pipelines.pop('audio')
 
         # Keep a quick reference map from port to text overlay element
         for port, channel in self.PORT_CHANNEL_MAP.iteritems():
             element_name = 'overlay{}'.format(self.FOURS_PORT_SLOT_MAP.get(port, ''))
             self.overlays[port] = self.pipelines[channel].get_by_name(element_name)
-
-        log.info('Playing pipelines')
-        for name, pipeline in self.pipelines.iteritems():
-            log.info('Setting %s pipeline to PLAY', name)
-            pipeline.set_state(Gst.State.PLAYING)
-        log.info('Setting audio pipeline to PLAY')
-        self.audio_pipeline.set_state(Gst.State.PLAYING)
-
-    def run_glib_loop(self):
-        self.g_loop = GObject.MainLoop()
-        try:
-            self.g_loop.run()
-        except KeyboardInterrupt:
-            log.info('Ctrl+C hit, quitting')
-            self.shutdown()
-            thread.interrupt_main()
-
-    def init_pipeline(self, name, cmd):
-        log.info('Initializing pipeline: %s', name)
-        log.debug(cmd)
-        pipeline = Gst.parse_launch(cmd)
-        self.pipelines[name] = pipeline
-        bus = pipeline.get_bus()
-        bus.add_signal_watch()
-        bus.connect('message', self.on_message(name))
-        return pipeline
-
-    def shutdown(self):
-        log.info('Shutting down')
-
-        log.info('Shutting down pipelines')
-        for name, pipeline in self.pipelines.iteritems():
-            log.info('Setting %s pipeline to NULL', name)
-            pipeline.set_state(Gst.State.NULL)
-        log.info('Setting audio pipeline to NULL')
-        self.audio_pipeline.set_state(Gst.State.NULL)
-
-        log.info('Quiting GLib.MainLoop')
-        self.g_loop.quit()
-
-        if threading.current_thread() is not self.g_loop_thread:
-            log.info('Join GLib MainLoop thread')
-            self.g_loop_thread.join()
 
     def set_title(self, port, title):
         log.info('Setting title for %d to %s', port, title)
@@ -168,27 +213,6 @@ class GstreamerManager(object):
 
     def get_titles(self):
         return self.titles
-
-    def on_message(self, name):
-        def f(bus, msg):
-            if msg.type == Gst.MessageType.ERROR:
-                err, debug = msg.parse_error()
-                log.error('Bus [%s], error: %s', name, err)
-            elif msg.type == Gst.MessageType.WARNING:
-                err, debug = msg.parse_warning()
-                log.warning('Bus [%s], warning: %s', name, err)
-            elif msg.has_name('GstUDPSrcTimeout'):
-                self.on_timeout(name)
-            elif msg.type not in (Gst.MessageType.QOS,
-                                  Gst.MessageType.STATE_CHANGED,
-                                  Gst.MessageType.STREAM_STATUS,
-                                  Gst.MessageType.STREAM_START):
-                structure = msg.get_structure()
-                if structure:
-                    log.debug('Bus [%s], %s: %s', name, msg.src.get_name(), structure.to_string())
-            return Gst.BusSyncReply.PASS
-
-        return f
 
     def on_timeout(self, name):
         """
@@ -215,32 +239,19 @@ class GstreamerManager(object):
         else:
             log.debug('Ignoring timeout: %s %d', name, count)
 
-    def restart_pipeline(self, name):
-        log.info('Restarting %s', name)
-        pipeline = self.pipelines[name]
-        pipeline.set_state(Gst.State.READY)
-        pipeline.set_state(Gst.State.PAUSED)
-        pipeline.set_state(Gst.State.PLAYING)
-
     def wake_up(self):
         """
         Make sure all video pipelines are alive.
         This is another signal for waking up udpsrc from long timeout periods.
         """
         for name, count in self.timeout_counters.iteritems():
-            log.debug('Wake up %s (%d timeouts)', name, count)
             if count > self.MEANINGFUL_TIMEOUT_PERIOD:
+                log.debug('Wake up %s (%d timeouts)', name, count)
                 self.restart_pipeline(name)
                 self.timeout_counters[name] = 0
 
-    def get_timeouts(self):
-        return self.timeout_counters
 
-    def is_alive(self):
-        return self.g_loop_thread and self.g_loop_thread.is_alive()
-
-
-class GstreamerManagerDev(GstreamerManager):
+class SDIManagerDev(SDIManager):
     SINGLE_CMD = ' ! '.join([
         'videotestsrc pattern={}',
         'video/x-raw,width=400,height=300',
@@ -270,3 +281,7 @@ class GstreamerManagerDev(GstreamerManager):
         'audioconvert',
         'autoaudiosink'
     ])
+
+
+class CompositeGSTManager(BaseGSTManager):
+    pass
