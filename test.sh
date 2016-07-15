@@ -20,3 +20,13 @@ videotestsrc pattern=ball ! mix. \
 # video/x-raw,width=400,height=300 ! \
 # textoverlay name=overlay text="<span foreground=\"white\" background=\"blue\">edos</span>" ypad=0 font-desc="LiberationSerif 32px" shaded-background=false draw-shadow=false valignment=top halignment=right ! \
 # autovideosink
+
+
+
+# Stream webcam over udp:
+#   http://stackoverflow.com/questions/7669240/webcam-streaming-using-gstreamer-over-udp
+# server:
+gst-launch-1.0 v4l2src ! x264enc pass=qual quantizer=20 tune=zerolatency ! rtph264pay ! udpsink host=127.0.0.1 port=123
+
+# client
+gst-launch-1.0 udpsrc port=1234 ! "application/x-rtp, payload=127" ! rtph264depay ! avdec_h264 ! xvimagesink sync=false

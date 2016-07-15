@@ -6,7 +6,7 @@ import pprint
 import bottle
 from bottle import request, response
 
-from manager import SDIManager, SDIManagerDev
+from manager import SDIManager, SDIManagerDev, CompositeGSTManager, CompositeGSTManagerDev
 
 logging.basicConfig(level=logging.DEBUG,
                     format='[%(asctime)s] %(levelname)s %(process)d %(threadName)s [%(name)s:%(lineno)s] %(message)s')
@@ -22,7 +22,16 @@ log.debug('Application config')
 log.debug(pprint.pformat(app.config))
 
 log.info('Initializing Gstreamer Manager')
-GSTManager = SDIManagerDev() if app.config['galaxy.env'] == 'dev' else SDIManager()
+env = app.config['galaxy.env']
+if env == 'production-sdi':
+    GSTManager = SDIManager()
+elif env == 'production-composite':
+    GSTManager = CompositeGSTManager()
+elif env == 'dev-composite':
+    GSTManager = CompositeGSTManagerDev()
+else:
+    GSTManager = SDIManagerDev()
+
 GSTManager.initialize()
 log.info('Gstreamer Manager initialization complete')
 
@@ -80,6 +89,12 @@ def restart():
     GSTManager.initialize()
     for port, title in GSTManager.get_titles().iteritems():
         GSTManager.set_title(port, title)
+    return "SUCCESS"
+
+
+@app.route('/refresh/', method=['OPTIONS', 'POST'])
+def refresh():
+    GSTManager.refresh()
     return "SUCCESS"
 
 

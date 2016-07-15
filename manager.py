@@ -93,6 +93,11 @@ class BaseGSTManager(object):
             log.info('Join GLib MainLoop thread')
             self.g_loop_thread.join()
 
+    def refresh(self):
+        log.info('Refresh: restarting all pipelines')
+        for name in self.pipelines:
+            self.restart_pipeline(name)
+
     def on_message(self, name):
         def f(bus, msg):
             if msg.type == Gst.MessageType.ERROR:
@@ -413,6 +418,33 @@ class CompositeGSTManager(BaseGSTManager):
 
     def on_timeout(self, name):
         super(CompositeGSTManager, self).on_timeout(name)
+
+
+class CompositeGSTManagerDev(CompositeGSTManager):
+
+    PREVIEW_CMD = ' ! '.join([
+        'compositor name=mix timeout=100000000 sink_0::xpos=0 sink_0::ypos=0 sink_1::xpos=0 sink_1::ypos=180 sink_2::xpos=320 sink_2::ypos=0 sink_3::xpos=320 sink_3::ypos=180 sync=false',
+        'autovideosink'
+    ]) + ' ' + ' '.join([
+        'videotestsrc pattern=0 ! mix.',
+        'videotestsrc pattern=1 ! mix.',
+        'videotestsrc pattern=2 ! mix.',
+        'udpsrc port=1234 timeout=1000000000 ! application/x-rtp, payload=127 ! rtph264depay ! avdec_h264 ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.'
+    ])
+
+    PROGRAM_CMD = ' ! '.join([
+        'compositor name=mix timeout=100000000 sink_0::xpos=0 sink_0::ypos=0 sink_1::xpos=0 sink_1::ypos=180 sink_2::xpos=320 sink_2::ypos=0 sink_3::xpos=320 sink_3::ypos=180 sync=false',
+        'autovideosink'
+    ]) + ' ' + ' '.join([
+        'videotestsrc pattern=4 ! mix.',
+        'videotestsrc pattern=5 ! mix.',
+        'videotestsrc pattern=6 ! mix.',
+        'videotestsrc pattern=7 ! mix.'
+    ])
+
+    def on_timeout(self, name):
+        super(CompositeGSTManagerDev, self).on_timeout(name)
+        log.warning('Timeout %s', name)
 
 
 
