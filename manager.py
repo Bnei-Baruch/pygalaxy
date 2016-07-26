@@ -4,6 +4,7 @@ import threading
 from collections import defaultdict
 
 import gi
+import time
 
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GObject
@@ -19,6 +20,7 @@ class BaseGSTManager(object):
         self.g_loop_thread = None
         self.pipelines = {}
         self.timeout_counters = defaultdict(int)
+        self.timeout_last = {}
 
     def initialize(self):
         log.info('Starting GLib.MainLoop thread')
@@ -71,12 +73,11 @@ class BaseGSTManager(object):
         bus.connect('message', self.on_message(name))
         return pipeline
 
-    def restart_pipeline(self, name):
-        log.info('Restarting %s', name)
-        pipeline = self.pipelines[name]
-        pipeline.set_state(Gst.State.READY)
-        pipeline.set_state(Gst.State.PAUSED)
-        pipeline.set_state(Gst.State.PLAYING)
+    @staticmethod
+    def restart_element(element):
+        element.set_state(Gst.State.READY)
+        element.set_state(Gst.State.PAUSED)
+        element.set_state(Gst.State.PLAYING)
 
     def shutdown(self):
         log.info('Shutting down')
@@ -93,11 +94,6 @@ class BaseGSTManager(object):
             log.info('Join GLib MainLoop thread')
             self.g_loop_thread.join()
 
-    def refresh(self):
-        log.info('Refresh: restarting all pipelines')
-        for name in self.pipelines:
-            self.restart_pipeline(name)
-
     def on_message(self, name):
         def f(bus, msg):
             if msg.type == Gst.MessageType.ERROR:
@@ -107,7 +103,7 @@ class BaseGSTManager(object):
                 err, debug = msg.parse_warning()
                 log.warning('Bus [%s], warning: %s', name, err)
             elif msg.has_name('GstUDPSrcTimeout'):
-                self.on_timeout(name)
+                self.on_timeout(name, msg)
             elif msg.type not in (Gst.MessageType.QOS,
                                   Gst.MessageType.STATE_CHANGED,
                                   Gst.MessageType.STREAM_STATUS,
@@ -119,8 +115,24 @@ class BaseGSTManager(object):
 
         return f
 
-    def on_timeout(self, name):
-        self.timeout_counters[name] += 1
+    def on_timeout(self, name, msg):
+        """
+        We keep track of consecutive timeouts for every udpsrc.
+        UdpSrcTimeout value is 1 second, so we define two consecutive timeouts such that
+        they occur no longer than 1.3 second one after the other.
+
+        When a timeout event comes later than 1.3 second after the previous event
+         it is considered new and we reset the counter.
+        """
+        port = msg.src.props.port
+        last_timeout = self.timeout_last.get(port)
+        self.timeout_last[port] = time.time()
+        if last_timeout and time.time() - last_timeout < 1.3:
+            self.timeout_counters[port] += 1  # Consecutive timeout
+            log.debug('Consecutive timeout %s [port %d]: %d', name, port, self.timeout_counters[port])
+        else:
+            self.timeout_counters[port] = 1
+            log.warning('New timeout %s [port %d]: %d', name, port, self.timeout_counters[port])
 
     def get_timeouts(self):
         return self.timeout_counters
@@ -219,7 +231,7 @@ class SDIManager(BaseGSTManager):
     def get_titles(self):
         return self.titles
 
-    def on_timeout(self, name):
+    def on_timeout(self, name, msg):
         """
         Timeouts are meaningful only during lessons.
          Outside lessons, this handler is called all the time since nobody is forwarding from janus.
@@ -233,14 +245,15 @@ class SDIManager(BaseGSTManager):
 
         We also wake up on moderator interaction (for example, set_title). See self.wake_up()
         """
-        super(SDIManager, self).on_timeout(name)
-        count = self.timeout_counters[name]
+        super(SDIManager, self).on_timeout(name, msg)
+        port = msg.src.props.port
+        count = self.timeout_counters[port]
         if count == self.TIMEOUT_RESET_TIME:
-            log.debug('Resetting timeout counter for %s after %d minutes of continuous timeout', name, 10)
-            count = self.timeout_counters[name] = 0
+            log.debug('Resetting timeout counter for %s [port %d] after %d minutes of continuous timeout', name, port, 10)
+            count = self.timeout_counters[port] = 0
         if count < self.MEANINGFUL_TIMEOUT_PERIOD:
-            log.warning('Meaningful timeout: %s, %d', name, count)
-            self.restart_pipeline(name)
+            log.warning('Meaningful timeout, restarting %s [port %d], %d', name, port, count)
+            self.restart_element(msg.src)
         else:
             log.debug('Ignoring timeout: %s %d', name, count)
 
@@ -249,11 +262,12 @@ class SDIManager(BaseGSTManager):
         Make sure all video pipelines are alive.
         This is another signal for waking up udpsrc from long timeout periods.
         """
-        for name, count in self.timeout_counters.iteritems():
+        for port, count in self.timeout_counters.iteritems():
             if count > self.MEANINGFUL_TIMEOUT_PERIOD:
-                log.debug('Wake up %s (%d timeouts)', name, count)
-                self.restart_pipeline(name)
-                self.timeout_counters[name] = 0
+                name = self.PORT_CHANNEL_MAP[port]
+                log.debug('Wake up %s [port %d], currently %d timeouts', name, port, count)
+                self.restart_element(self.pipelines[name])
+                self.timeout_counters[port] = 0
 
 
 class SDIManagerDev(SDIManager):
@@ -277,9 +291,11 @@ class SDIManagerDev(SDIManager):
     ]) + ' ' + ' '.join([
         'videotestsrc pattern=0 ! mix.',
         'videotestsrc pattern=snow ! mix.',
-        'videotestsrc pattern=spokes ! mix.',
-        'videotestsrc pattern=ball ! mix.'
+        'udpsrc port=1235 timeout=1000000000 ! application/x-rtp, encoding-name=JPEG, payload=26 ! rtpjpegdepay ! jpegdec ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.',
+        'udpsrc port=1234 timeout=1000000000 ! application/x-rtp, payload=127 ! rtph264depay ! avdec_h264 ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.'
     ])
+
+    'videoconvert ! videoscale add-borders=false method=4 ! videorate ! interlace field-pattern=2:2 ! video/x-raw, format=UYVY, width=720, height=576, framerate=25/1, interlace-mode=interleaved, pixel-aspect-ratio=12/11, colorimetry=bt601, chroma-site=mpeg2'
 
     AUDIO_CMD = ' ! '.join([
         'audiotestsrc',
@@ -416,8 +432,16 @@ class CompositeGSTManager(BaseGSTManager):
         self.init_pipeline('program', self.PROGRAM_CMD)
         self.init_pipeline('preview', self.PREVIEW_CMD)
 
-    def on_timeout(self, name):
-        super(CompositeGSTManager, self).on_timeout(name)
+    def on_timeout(self, name, msg):
+        """
+        Note that we restart the specific UdpSrc rather than the whole pipeline.
+        """
+        super(CompositeGSTManager, self).on_timeout(name, msg)
+
+        port = msg.src.props.port
+        if self.timeout_counters[port] % 10 == 0:
+            log.warning('10th consecutive timeout, restarting updsrc on port %d', msg.src.props.port)
+            self.restart_element(msg.src)
 
 
 class CompositeGSTManagerDev(CompositeGSTManager):
@@ -428,7 +452,7 @@ class CompositeGSTManagerDev(CompositeGSTManager):
     ]) + ' ' + ' '.join([
         'videotestsrc pattern=0 ! mix.',
         'videotestsrc pattern=1 ! mix.',
-        'videotestsrc pattern=2 ! mix.',
+        'udpsrc port=1235 timeout=1000000000 ! application/x-rtp, encoding-name=JPEG, payload=26 ! rtpjpegdepay ! jpegdec ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.',
         'udpsrc port=1234 timeout=1000000000 ! application/x-rtp, payload=127 ! rtph264depay ! avdec_h264 ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.'
     ])
 
@@ -442,9 +466,6 @@ class CompositeGSTManagerDev(CompositeGSTManager):
         'videotestsrc pattern=7 ! mix.'
     ])
 
-    def on_timeout(self, name):
-        super(CompositeGSTManagerDev, self).on_timeout(name)
-        log.warning('Timeout %s', name)
 
 
 

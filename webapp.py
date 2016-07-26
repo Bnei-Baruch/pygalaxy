@@ -87,14 +87,9 @@ def health_check():
 def restart():
     GSTManager.shutdown()
     GSTManager.initialize()
-    for port, title in GSTManager.get_titles().iteritems():
-        GSTManager.set_title(port, title)
-    return "SUCCESS"
-
-
-@app.route('/refresh/', method=['OPTIONS', 'POST'])
-def refresh():
-    GSTManager.refresh()
+    if isinstance(GSTManager, SDIManager):
+        for port, title in GSTManager.get_titles().iteritems():
+            GSTManager.set_title(port, title)
     return "SUCCESS"
 
 

@@ -1,4 +1,6 @@
-Composite timeouts handling
+Fix SDIManager.wake_up and test due to updsrc restarts instead of pipeline restart
+Need to recreate the entire pipline...
+
 Composite deployment
 Persist titles on disk
 QOS analysis
