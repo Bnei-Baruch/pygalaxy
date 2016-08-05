@@ -43,6 +43,8 @@ class BaseGSTManager(object):
         log.info('Playing pipelines')
         self.play_pipelines()
 
+        self.clear_timeouts()
+
     def run_glib_loop(self):
         self.g_loop = GObject.MainLoop()
         try:
@@ -78,6 +80,10 @@ class BaseGSTManager(object):
         element.set_state(Gst.State.READY)
         element.set_state(Gst.State.PAUSED)
         element.set_state(Gst.State.PLAYING)
+
+    def restart_matching_udpsrc(self, src, port):
+        if src.g_type_instance.g_class.g_type.name == 'GstUDPSrc' and src.props.port == port:
+            self.restart_element(src)
 
     def shutdown(self):
         log.info('Shutting down')
@@ -136,6 +142,24 @@ class BaseGSTManager(object):
 
     def get_timeouts(self):
         return self.timeout_counters
+
+    def clear_timeouts(self):
+        """
+        This function runs every 1 seconds and clear timeout counters
+         for ports which have not timeout in the last 2 seconds.
+        This is necessary for counting only consecutive timeouts.
+        """
+        t = time.time()
+        for port, last_timeout in self.timeout_last.items():
+            if t - last_timeout > 2:
+                log.debug('port [%d] seems to have stable stream, clearing timeout counters', port)
+                del self.timeout_last[port]
+                del self.timeout_counters[port]
+
+        # Call ourselves again in 1 second
+        timer = threading.Timer(1.0, self.clear_timeouts)
+        timer.daemon = True  # so program could exit cleanly
+        timer.start()
 
 
 class SDIManager(BaseGSTManager):
@@ -266,7 +290,7 @@ class SDIManager(BaseGSTManager):
             if count > self.MEANINGFUL_TIMEOUT_PERIOD:
                 name = self.PORT_CHANNEL_MAP[port]
                 log.debug('Wake up %s [port %d], currently %d timeouts', name, port, count)
-                self.restart_element(self.pipelines[name])
+                self.pipelines[name].iterate_sources().foreach(self.restart_matching_udpsrc, port)
                 self.timeout_counters[port] = 0
 
 
@@ -291,8 +315,8 @@ class SDIManagerDev(SDIManager):
     ]) + ' ' + ' '.join([
         'videotestsrc pattern=0 ! mix.',
         'videotestsrc pattern=snow ! mix.',
-        'udpsrc port=1235 timeout=1000000000 ! application/x-rtp, encoding-name=JPEG, payload=26 ! rtpjpegdepay ! jpegdec ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.',
-        'udpsrc port=1234 timeout=1000000000 ! application/x-rtp, payload=127 ! rtph264depay ! avdec_h264 ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.'
+        'udpsrc port=5028 timeout=1000000000 ! application/x-rtp, encoding-name=JPEG, payload=26 ! rtpjpegdepay ! jpegdec ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.',
+        'udpsrc port=5030 timeout=1000000000 ! application/x-rtp, payload=127 ! rtph264depay ! avdec_h264 ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.'
     ])
 
     'videoconvert ! videoscale add-borders=false method=4 ! videorate ! interlace field-pattern=2:2 ! video/x-raw, format=UYVY, width=720, height=576, framerate=25/1, interlace-mode=interleaved, pixel-aspect-ratio=12/11, colorimetry=bt601, chroma-site=mpeg2'
@@ -452,8 +476,8 @@ class CompositeGSTManagerDev(CompositeGSTManager):
     ]) + ' ' + ' '.join([
         'videotestsrc pattern=0 ! mix.',
         'videotestsrc pattern=1 ! mix.',
-        'udpsrc port=1235 timeout=1000000000 ! application/x-rtp, encoding-name=JPEG, payload=26 ! rtpjpegdepay ! jpegdec ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.',
-        'udpsrc port=1234 timeout=1000000000 ! application/x-rtp, payload=127 ! rtph264depay ! avdec_h264 ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.'
+        'udpsrc port=5028 timeout=1000000000 ! application/x-rtp, encoding-name=JPEG, payload=26 ! rtpjpegdepay ! jpegdec ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.',
+        'udpsrc port=5030 timeout=1000000000 ! application/x-rtp, payload=127 ! rtph264depay ! avdec_h264 ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.'
     ])
 
     PROGRAM_CMD = ' ! '.join([

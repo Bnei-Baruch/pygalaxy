@@ -26,17 +26,17 @@ videotestsrc pattern=ball ! mix. \
 # Stream webcam over udp:
 #   http://stackoverflow.com/questions/7669240/webcam-streaming-using-gstreamer-over-udp
 # server:
-gst-launch-1.0 v4l2src ! x264enc pass=qual quantizer=20 tune=zerolatency ! rtph264pay ! udpsink host=127.0.0.1 port=1234
+gst-launch-1.0 v4l2src ! x264enc pass=qual quantizer=20 tune=zerolatency ! rtph264pay ! udpsink host=127.0.0.1 port=5030
 
 # client
-gst-launch-1.0 udpsrc port=1234 ! "application/x-rtp, payload=127" ! rtph264depay ! avdec_h264 ! xvimagesink sync=false
+gst-launch-1.0 udpsrc port=5030 ! "application/x-rtp, payload=127" ! rtph264depay ! avdec_h264 ! xvimagesink sync=false
 
 
 
-gst-launch-1.0 videotestsrc pattern=ball ! jpegenc ! rtpjpegpay ! udpsink host=127.0.0.1 port=1235
-gst-launch-1.0 udpsrc port=1235 ! "application/x-rtp, encoding-name=JPEG, payload=26" ! rtpjpegdepay ! jpegdec ! autovideosink
+gst-launch-1.0 videotestsrc pattern=ball ! jpegenc ! rtpjpegpay ! udpsink host=127.0.0.1 port=5028
+gst-launch-1.0 udpsrc port=5028 ! "application/x-rtp, encoding-name=JPEG, payload=26" ! rtpjpegdepay ! jpegdec ! autovideosink
 
 
 
 
-gst-launch-1.0 multifilesrc location="IMG_0726.JPG" caps="image/jpeg,framerate=1/1" ! jpegdec ! videoconvert ! videorate ! x264enc pass=qual quantizer=20 tune=zerolatency ! rtph264pay ! udpsink host=127.0.0.1 port=1235
+gst-launch-1.0 multifilesrc location="IMG_0726.JPG" caps="image/jpeg,framerate=1/1" ! jpegdec ! videoconvert ! videorate ! x264enc pass=qual quantizer=20 tune=zerolatency ! rtph264pay ! udpsink host=127.0.0.1 port=5028
