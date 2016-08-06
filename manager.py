@@ -283,15 +283,27 @@ class SDIManager(BaseGSTManager):
 
     def wake_up(self):
         """
-        Make sure all video pipelines are alive.
-        This is another signal for waking up udpsrc from long timeout periods.
+        Iff all ports are in timeouts then restart everything.
+        We mimic the login in webapp /restart/ action
         """
-        for port, count in self.timeout_counters.iteritems():
-            if count > self.MEANINGFUL_TIMEOUT_PERIOD:
-                name = self.PORT_CHANNEL_MAP[port]
-                log.debug('Wake up %s [port %d], currently %d timeouts', name, port, count)
-                self.pipelines[name].iterate_sources().foreach(self.restart_matching_udpsrc, port)
-                self.timeout_counters[port] = 0
+        if len([count for count in self.timeout_counters.values() if count > 0]) == len(self.PORT_CHANNEL_MAP):
+            log.info("WAKEING UP !")
+
+            # Copy titles so we won't loose them
+            titles = self.titles.copy()
+
+            # Shutdown properly
+            self.shutdown()
+
+            # Redeclare all members
+            self.__init__()
+
+            # Initialize properly
+            self.initialize()
+
+            # Restore titles
+            for port, title in titles.iteritems():
+                self.set_title(port, title)
 
 
 class SDIManagerDev(SDIManager):
