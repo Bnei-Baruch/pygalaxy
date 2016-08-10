@@ -1,0 +1,10 @@
+# cron jobs for pygalaxy SDI environment
+
+# Restart every day before morning lesson
+15 2 * * * supervisorctl restart pygalaxy
+
+# Restart Friday before Noon lesson
+0 13 * * * supervisorctl restart pygalaxy
+
+# Restart Saturday before Noon lesson
+0 15 * * * supervisorctl restart pygalaxy

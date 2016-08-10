@@ -1,0 +1,12 @@
+# cron jobs for pygalaxy Composite environment
+# Note that these wierd times are due to clock offset on v4g server.
+# Once that is changed we need to change these restart times
+
+# Restart every day before morning lesson
+0 5 * * * supervisorctl restart pygalaxy
+
+# Restart Friday before Noon lesson
+45 15 * * * supervisorctl restart pygalaxy
+
+# Restart Saturday before Noon lesson
+45 17 * * * supervisorctl restart pygalaxy
