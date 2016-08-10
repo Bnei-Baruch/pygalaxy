@@ -1,4 +1,4 @@
-# cron jobs for pygalaxy SDI environment
+# cron jobs for pygalaxy Composite environment
 
 # Every day before morning lesson
 15 2 * * 0-6 supervisorctl restart pygalaxy
