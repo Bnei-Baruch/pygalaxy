@@ -250,7 +250,7 @@ class SDIManager(BaseGSTManager):
         log.info('Setting title for %d to %s', port, title)
         self.titles[port] = title
         self.overlays[port].set_property('text', '<span foreground="white" background="blue">' + title + '</span>')
-        self.wake_up()
+        # self.wake_up()
 
     def get_titles(self):
         return self.titles
@@ -281,29 +281,29 @@ class SDIManager(BaseGSTManager):
         else:
             log.debug('Ignoring timeout: %s %d', name, count)
 
-    def wake_up(self):
-        """
-        Iff all ports are in timeouts then restart everything.
-        We mimic the login in webapp /restart/ action
-        """
-        if len([count for count in self.timeout_counters.values() if count > 0]) == len(self.PORT_CHANNEL_MAP):
-            log.info("WAKEING UP !")
-
-            # Copy titles so we won't loose them
-            titles = self.titles.copy()
-
-            # Shutdown properly
-            self.shutdown()
-
-            # Redeclare all members
-            self.__init__()
-
-            # Initialize properly
-            self.initialize()
-
-            # Restore titles
-            for port, title in titles.iteritems():
-                self.set_title(port, title)
+    # def wake_up(self):
+    #     """
+    #     Iff all ports are in timeouts then restart everything.
+    #     We mimic the login in webapp /restart/ action
+    #     """
+    #     if len([count for count in self.timeout_counters.values() if count > 0]) == len(self.PORT_CHANNEL_MAP):
+    #         log.info("WAKEING UP !")
+    #
+    #         # Copy titles so we won't loose them
+    #         titles = self.titles.copy()
+    #
+    #         # Shutdown properly
+    #         self.shutdown()
+    #
+    #         # Redeclare all members
+    #         self.__init__()
+    #
+    #         # Initialize properly
+    #         self.initialize()
+    #
+    #         # Restore titles
+    #         for port, title in titles.iteritems():
+    #             self.set_title(port, title)
 
 
 class SDIManagerDev(SDIManager):
