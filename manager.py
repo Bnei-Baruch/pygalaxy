@@ -277,7 +277,7 @@ class SDIManager(BaseGSTManager):
             count = self.timeout_counters[port] = 0
         if count < self.MEANINGFUL_TIMEOUT_PERIOD:
             log.warning('Meaningful timeout, restarting %s [port %d], %d', name, port, count)
-            self.restart_element(msg.src)
+            self.restart_element(self.pipelines[name])
         else:
             log.debug('Ignoring timeout: %s %d', name, count)
 
@@ -330,8 +330,6 @@ class SDIManagerDev(SDIManager):
         'udpsrc port=5028 timeout=1000000000 ! application/x-rtp, encoding-name=JPEG, payload=26 ! rtpjpegdepay ! jpegdec ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.',
         'udpsrc port=5030 timeout=1000000000 ! application/x-rtp, payload=127 ! rtph264depay ! avdec_h264 ! videoscale ! videorate ! videoconvert ! video/x-raw, format=UYVY, width=320, height=180, framerate=20/1 ! mix.'
     ])
-
-    'videoconvert ! videoscale add-borders=false method=4 ! videorate ! interlace field-pattern=2:2 ! video/x-raw, format=UYVY, width=720, height=576, framerate=25/1, interlace-mode=interleaved, pixel-aspect-ratio=12/11, colorimetry=bt601, chroma-site=mpeg2'
 
     AUDIO_CMD = ' ! '.join([
         'audiotestsrc',
