@@ -81,10 +81,6 @@ class BaseGSTManager(object):
         element.set_state(Gst.State.PAUSED)
         element.set_state(Gst.State.PLAYING)
 
-    def restart_matching_udpsrc(self, src, port):
-        if src.g_type_instance.g_class.g_type.name == 'GstUDPSrc' and src.props.port == port:
-            self.restart_element(src)
-
     def shutdown(self):
         log.info('Shutting down')
 
@@ -315,7 +311,8 @@ class SDIManagerDev(SDIManager):
 
     LARGE_CMD = SINGLE_CMD.format('9')
     SMALL_CMD = SINGLE_CMD.format('snow')
-    CONTROL_CMD = SINGLE_CMD.format('ball')
+    # CONTROL_CMD = SINGLE_CMD.format('ball')
+    CONTROL_CMD = 'udpsrc port=8044 timeout=1000000000 ! application/x-rtp, payload=127 ! rtph264depay ! avdec_h264 ! xvimagesink sync=false'
 
     FOURS_CMD = ' ! '.join([
         'compositor name=mix timeout=100000000 sink_0::xpos=0 sink_0::ypos=0 sink_1::xpos=0 sink_1::ypos=180 sink_2::xpos=320 sink_2::ypos=0 sink_3::xpos=320 sink_3::ypos=180 sync=false',
