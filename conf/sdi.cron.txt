@@ -4,13 +4,13 @@
 15 2 * * 0-5 supervisorctl restart pygalaxy
 
 # Friday before Noon lesson
-0 13 * * 5 supervisorctl restart pygalaxy
+0 12 * * 5 supervisorctl restart pygalaxy
 
 # Saturday before morning lesson
 15 3 * * 6 supervisorctl restart pygalaxy
 
 # Saturday before Noon lesson
-15 15 * * 6 supervisorctl restart pygalaxy
+30 14 * * 6 supervisorctl restart pygalaxy
 
 # Every evening before some broadcasted event (Yeshivat Haverim, Young Group, what ever)
 15 18 * * * supervisorctl restart pygalaxy
